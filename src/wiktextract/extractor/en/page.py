@@ -1021,6 +1021,16 @@ def parse_language(
                 pron.pop(key)  # type: ignore
             return pron
 
+        def sound_matches_pos(sound: SoundData, pos: str) -> bool:
+            if "pos" not in sound:
+                return True
+            sound_pos = sound["pos"]  # type: ignore[typeddict-item]
+            return pos in sound_pos
+
+        def strip_sound_pos(sound: SoundData) -> SoundData:
+            complementary_pop(sound, "pos")
+            return sound
+
         # If the result has sounds, eliminate sounds that have a prefix that
         # does not match "word" or one of "forms"
         if "sounds" in data and "word" in data:
@@ -1035,12 +1045,14 @@ def parse_language(
         # does not match "pos"
         if "sounds" in data and "pos" in data:
             data["sounds"] = list(
-                complementary_pop(s, "pos")
+                strip_sound_pos(s)
                 for s in data["sounds"]
                 # "pos" is not a field of SoundData, correctly, so we're
                 # removing it here. It's a kludge on a kludge on a kludge.
-                if "pos" not in s or s["pos"] == data["pos"]  # type: ignore[typeddict-item]
+                if sound_matches_pos(s, data["pos"])
             )
+        elif "sounds" in data:
+            data["sounds"] = [strip_sound_pos(s) for s in data["sounds"]]
 
     def push_sense(sorting_ordinal: int | None = None) -> bool:
         """Starts collecting data for a new word sense.  This returns True

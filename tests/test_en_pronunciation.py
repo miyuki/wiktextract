@@ -72,47 +72,47 @@ class TestPronunciation(TestCase):
                     {
                         "tags": ["Received-Pronunciation"],
                         "enpr": "föö",
-                        "pos": "noun",
+                        "pos": ["noun"],
                     },
                     {
                         "ipa": "/foo/",
                         "tags": ["Received-Pronunciation"],
-                        "pos": "noun",
+                        "pos": ["noun"],
                     },
                     {
                         "tags": ["Received-Pronunciation"],
                         "ipa": "/bar/",
-                        "pos": "noun",
+                        "pos": ["noun"],
                     },
                     {
                         "enpr": "bär",
                         "tags": ["Received-Pronunciation"],
-                        "pos": "noun",
+                        "pos": ["noun"],
                     },
                     {
                         "tags": ["Northern-England", "Scotland"],
                         "ipa": "/baz/",
-                        "pos": "noun",
+                        "pos": ["noun"],
                     },
                     {
                         "audio": "LL-Q1860 (eng)-Back ache-past.wav",
                         "ogg_url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/7/7a/LL-Q1860_%28eng%29-Back_ache-past.wav/LL-Q1860_%28eng%29-Back_ache-past.wav.ogg",
                         "mp3_url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/7/7a/LL-Q1860_%28eng%29-Back_ache-past.wav/LL-Q1860_%28eng%29-Back_ache-past.wav.mp3",
-                        "pos": "noun",
+                        "pos": ["noun"],
                         "tags": ["UK"],
                     },
-                    {"tags": ["US"], "enpr": "vöö", "pos": "verb"},
-                    {"ipa": "/voo/", "tags": ["US"], "pos": "verb"},
+                    {"tags": ["US"], "enpr": "vöö", "pos": ["verb"]},
+                    {"ipa": "/voo/", "tags": ["US"], "pos": ["verb"]},
                     {
                         "audio": "en-us-past.ogg",
                         "ogg_url": "https://upload.wikimedia.org/wikipedia/commons/b/b0/En-us-past.ogg",
                         "mp3_url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/b/b0/En-us-past.ogg/En-us-past.ogg.mp3",
-                        "pos": "verb",
+                        "pos": ["verb"],
                         "tags": ["US"],
                     },
-                    {"homophone": "feu", "pos": "verb"},
-                    {"rhymes": "-oo", "pos": "verb"},
-                    {"rhymes": "-öö", "pos": "verb"},
+                    {"homophone": "feu", "pos": ["verb"]},
+                    {"rhymes": "-oo", "pos": ["verb"]},
+                    {"rhymes": "-öö", "pos": ["verb"]},
                     {
                         "tags": [
                             "Received-Pronunciation",
@@ -123,7 +123,7 @@ class TestPronunciation(TestCase):
                         ],
                         "note": "Caribbean, note-fodder causes everything to be a note",
                         "ipa": "/foobar/",
-                        "pos": "verb",
+                        "pos": ["verb"],
                     },
                     {
                         "tags": [
@@ -134,7 +134,7 @@ class TestPronunciation(TestCase):
                         ],
                         "note": "Cajun, dual",
                         "ipa": "foobaz(ipa accepts parens)",
-                        "pos": "verb",
+                        "pos": ["verb"],
                     },
                     {
                         "tags": [
@@ -144,7 +144,7 @@ class TestPronunciation(TestCase):
                             "paucal",
                         ],
                         "ipa": "barbar",
-                        "pos": "verb",
+                        "pos": ["verb"],
                     },
                     {
                         "tags": [
@@ -154,7 +154,7 @@ class TestPronunciation(TestCase):
                             "paucal",
                         ],
                         "ipa": "barbaz",
-                        "pos": "verb",
+                        "pos": ["verb"],
                     },
                     {
                         "tags": [
@@ -164,7 +164,7 @@ class TestPronunciation(TestCase):
                             "paucal",
                         ],
                         "ipa": "baz",
-                        "pos": "verb",
+                        "pos": ["verb"],
                     },
                     {
                         "tags": [
@@ -175,7 +175,7 @@ class TestPronunciation(TestCase):
                             "singular",
                         ],
                         "ipa": "bazfoo",
-                        "pos": "verb",
+                        "pos": ["verb"],
                     },
                 ]
             },
@@ -203,12 +203,77 @@ class TestPronunciation(TestCase):
                     {
                         "tags": ["Received-Pronunciation"],
                         "enpr": "föö",
-                        "pos": "noun",
+                        "pos": ["noun"],
                     },
                     {
                         "tags": ["Received-Pronunciation"],
                         "ipa": "/foo/",
-                        "pos": "noun",
+                        "pos": ["noun"],
+                    },
+                ]
+            },
+        )
+
+    def test_multi_pos_plain_text_label(self):
+        self.wxr.wtp.start_page("offset")
+        self.wxr.wtp.add_page("Template:IPA", 10, "IPA⁽ᵏᵉʸ⁾: /ˈɔfsɛt/")
+        tree = self.wxr.wtp.parse("""=== Pronunciation ===
+* Noun and verb:
+* {{IPA|en|/ˈɔfsɛt/}}
+""")
+        out = {}
+        parse_pronunciation(self.wxr, tree.children[0], out, {}, {}, {}, "en")
+        self.assertEqual(
+            out,
+            {"sounds": [{"ipa": "/ˈɔfsɛt/", "pos": ["noun", "verb"]}]},
+        )
+
+    def test_bold_pos_plain_text_label(self):
+        self.wxr.wtp.start_page("use")
+        self.wxr.wtp.add_page("Template:IPA", 10, "IPA⁽ᵏᵉʸ⁾: /juːs/")
+        tree = self.wxr.wtp.parse("""=== Pronunciation ===
+'''Noun'''
+* {{IPA|en|/juːs/}}
+""")
+        out = {}
+        parse_pronunciation(self.wxr, tree.children[0], out, {}, {}, {}, "en")
+        self.assertEqual(out, {"sounds": [{"ipa": "/juːs/", "pos": ["noun"]}]})
+
+    def test_non_pos_qualifier_not_converted_to_pos(self):
+        self.wxr.wtp.start_page("foo")
+        tree = self.wxr.wtp.parse("""=== Pronunciation ===
+* (US) IPA⁽ᵏᵉʸ⁾: /fu/
+""")
+        out = {}
+        parse_pronunciation(self.wxr, tree.children[0], out, {}, {}, {}, "en")
+        self.assertEqual(out, {"sounds": [{"tags": ["US"], "ipa": "/fu/"}]})
+
+    def test_determinate_parenthesized_pos_prefixes(self):
+        self.wxr.wtp.start_page("determinate")
+        self.wxr.wtp.add_page(
+            "Template:IPA",
+            10,
+            "({{{a}}}) IPA⁽ᵏᵉʸ⁾: {{{2}}}",
+        )
+        tree = self.wxr.wtp.parse("""=== Pronunciation ===
+* (adjective, noun) {{IPA|en|/dɪˈtɜːmɪnət/|a=UK}}
+* (verb) {{IPA|en|/dɪˈtɜːmɪneɪt/|a=UK}}
+""")
+        out = {}
+        parse_pronunciation(self.wxr, tree.children[0], out, {}, {}, {}, "en")
+        self.assertEqual(
+            out,
+            {
+                "sounds": [
+                    {
+                        "ipa": "/dɪˈtɜːmɪnət/",
+                        "tags": ["UK"],
+                        "pos": ["adj", "noun"],
+                    },
+                    {
+                        "ipa": "/dɪˈtɜːmɪneɪt/",
+                        "tags": ["UK"],
+                        "pos": ["verb"],
                     },
                 ]
             },
@@ -234,10 +299,10 @@ class TestPronunciation(TestCase):
                     {
                         "tags": ["Received-Pronunciation"],
                         "ipa": "/foo/",
-                        "pos": "noun",
+                        "pos": ["noun"],
                     },
-                    {"homophone": "feu", "pos": "noun"},
-                    {"rhymes": "-oo", "pos": "noun"},
+                    {"homophone": "feu", "pos": ["noun"]},
+                    {"rhymes": "-oo", "pos": ["noun"]},
                 ]
             },
         )
