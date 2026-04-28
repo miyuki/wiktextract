@@ -62,6 +62,20 @@ class PronunciationPosPrefix(NamedTuple):
     is_persistent: bool
 
 
+PRON_POS_TEMPLATE_NAMES = {
+    "q",
+    "qualifier",
+    "qual",
+    "i",
+    "sense",
+    "a",
+    "accent",
+    "lb",
+    "lbl",
+    "label",
+}
+
+
 def normalize_pronunciation_pos_label(label: str) -> str:
     label = label.strip().lower()
     label = re.sub(r"\s+", " ", label)
@@ -130,6 +144,40 @@ def extract_pos_prefix(text: str) -> PronunciationPosPrefix | None:
             )
 
     return None
+
+
+def extract_pronunciation_pos_template(
+    wxr: WiktextractContext,
+    name: str,
+    ht: TemplateArgs,
+    lang_code: str,
+) -> PronunciationPosMatch:
+    if name in {"a", "accent", "lb", "lbl", "label"}:
+        pos_args = [
+            value
+            for key, value in ht.items()
+            if isinstance(key, int) and key >= 2
+        ]
+        if not pos_args and ht.get(1) != lang_code:
+            pos_args = [ht.get(1, "")]
+    else:
+        pos_args = [
+            value
+            for key, value in ht.items()
+            if isinstance(key, int) and key >= 1
+        ]
+
+    pos_values: list[str] = []
+    residual: list[str] = []
+    for arg in pos_args:
+        text = clean_node(wxr, None, [arg])
+        match = split_pronunciation_pos_text(text)
+        for pos in match.pos_values:
+            if pos not in pos_values:
+                pos_values.append(pos)
+        if match.residual:
+            residual.append(match.residual)
+    return PronunciationPosMatch(pos_values, ", ".join(residual))
 
 
 def extract_pron_template(
@@ -328,6 +376,7 @@ def parse_pronunciation(
     if have_etym and data is base_data:
         data = etym_data
     pron_templates: list[tuple[SoundData, list[SoundData]]] = []
+    pron_pos_markers: list[list[str]] = []
     hyphenations: list[Hyphenation] = []
     audios: list[SoundData] = []
     have_panel_templates = False
@@ -453,17 +502,22 @@ def parse_pronunciation(
         # calling other subtemplates that are handled in _template_fn.
         if is_panel_template(wxr, name):
             return ""
+        if name in PRON_POS_TEMPLATE_NAMES:
+            pos_match = extract_pronunciation_pos_template(
+                wxr, name, ht, lang_code
+            )
+            if pos_match.pos_values:
+                pron_pos_markers.append(pos_match.pos_values)
+                marker = (
+                    f"__PRON_POS_MARKER_{len(pron_pos_markers) - 1}__"
+                )
+                if pos_match.residual:
+                    return f"{marker} ({pos_match.residual})"
+                return marker
         if name in {
-            "q",
-            "qualifier",
-            "sense",
-            "a",
-            "accent",
+            *PRON_POS_TEMPLATE_NAMES,
             "l",
             "link",
-            "lb",
-            "lbl",
-            "label",
         }:
             # Kludge: when these templates expand to /.../ or [...],
             # replace the expansion by something safe.  This is used
@@ -545,6 +599,8 @@ def parse_pronunciation(
         prefix: str | None = None
         earlier_base_data: SoundData | None = None
         line_pos: list[str] | None = None
+        current_group_sounds: list[SoundData] = []
+        line_has_sound = False
         if not line:
             continue
 
@@ -566,6 +622,24 @@ def parse_pronunciation(
                         active_pos = pos_prefix.pos_values
             if not text:
                 continue
+
+            m = re.search(r"__PRON_POS_MARKER_(\d+)__", text)
+            while m:
+                if current_group_sounds and re.search(
+                    r"[,;]", text[: m.start()]
+                ):
+                    current_group_sounds = []
+                pos_values = pron_pos_markers[int(m.group(1))]
+                if current_group_sounds:
+                    for sound in current_group_sounds:
+                        set_sound_pos(sound, pos_values)
+                line_pos = pos_values
+                text = text[: m.start()] + text[m.end() :]
+                m = re.search(r"__PRON_POS_MARKER_(\d+)__", text)
+            text = text.strip()
+            if not text:
+                continue
+
             if i % 2 == 1:
                 # re.split (with capture groups) splits the lines so that
                 # every even entry is a captured splitter; odd lines are either
@@ -595,6 +669,8 @@ def parse_pronunciation(
                     set_sound_pos(pr, line_pos or active_pos)
                     if pr not in data.get("sounds", ()):
                         data_append(data, "sounds", pr)
+                    current_group_sounds.append(pr)
+                    line_has_sound = True
                 # This bit is handled
                 continue
 
@@ -611,6 +687,8 @@ def parse_pronunciation(
                 pron: SoundData = {field: m.group(1)}  # type: ignore[misc]
                 set_sound_pos(pron, line_pos or active_pos)
                 data_append(data, "sounds", pron)
+                current_group_sounds.append(pron)
+                line_has_sound = True
                 # have_pronunciations = True
                 continue
 
@@ -623,6 +701,8 @@ def parse_pronunciation(
                         pron = {"rhymes": ending}
                         set_sound_pos(pron, line_pos or active_pos)
                         data_append(data, "sounds", pron)
+                        current_group_sounds.append(pron)
+                        line_has_sound = True
                         # have_pronunciations = True
                 continue
 
@@ -635,6 +715,8 @@ def parse_pronunciation(
                         pron = {"homophone": w}
                         set_sound_pos(pron, line_pos or active_pos)
                         data_append(data, "sounds", pron)
+                        current_group_sounds.append(pron)
+                        line_has_sound = True
                         # have_pronunciations = True
                 continue
 
@@ -649,6 +731,8 @@ def parse_pronunciation(
                         pron = {"hangeul": w}
                         set_sound_pos(pron, line_pos or active_pos)
                         data_append(data, "sounds", pron)
+                        current_group_sounds.append(pron)
+                        line_has_sound = True
                         # have_pronunciations = True
 
             # This regex-based hyphenation detection left as backup
@@ -747,7 +831,13 @@ def parse_pronunciation(
                     if "pos" not in pron:
                         set_sound_pos(pron, line_pos or active_pos)
                     data_append(data, "sounds", pron)
+                    current_group_sounds.append(pron)
+                    line_has_sound = True
                 # have_pronunciations = True
+            if current_group_sounds and re.search(r"[,;]", text):
+                current_group_sounds = []
+        if line_pos and not line_has_sound:
+            active_pos = line_pos
 
         # XXX what about {{hyphenation|...}}, {{hyph|...}}
         # and those used to be stored under "hyphenation"

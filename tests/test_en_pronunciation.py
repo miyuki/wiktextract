@@ -26,6 +26,27 @@ class TestPronunciation(TestCase):
             self.wxr.thesaurus_db_path, self.wxr.thesaurus_db_conn
         )
 
+    def add_pos_pronunciation_templates(self) -> None:
+        self.wxr.wtp.add_page(
+            "Template:IPA", 10, "IPA⁽ᵏᵉʸ⁾: {{{2}}}"
+        )
+        self.wxr.wtp.add_page(
+            "Template:q",
+            10,
+            "({{{1}}}{{#if:{{{2|}}}|, {{{2}}}}}{{#if:{{{3|}}}|, {{{3}}}}})",
+        )
+        self.wxr.wtp.add_page(
+            "Template:sense",
+            10,
+            "({{{1}}}{{#if:{{{2|}}}|, {{{2}}}}}):",
+        )
+        self.wxr.wtp.add_page("Template:i", 10, "({{{1}}})")
+        self.wxr.wtp.add_page(
+            "Template:a",
+            10,
+            "({{{2}}}{{#if:{{{3|}}}|, {{{3}}}}})",
+        )
+
     def test1(self):
         self.wxr.wtp.start_page("foo")
         self.wxr.wtp.add_page(
@@ -277,6 +298,112 @@ class TestPronunciation(TestCase):
                     },
                 ]
             },
+        )
+
+    def test_pos_template_line_labels_following_sublist(self):
+        self.wxr.wtp.start_page("increase")
+        self.add_pos_pronunciation_templates()
+        tree = self.wxr.wtp.parse("""=== Pronunciation ===
+* {{q|verb}}
+** {{IPA|en|/ɪnˈkɹiːs/}}
+* {{q|noun}}
+** {{IPA|en|/ˈɪnkɹiːs/}}
+""")
+        out = {}
+        parse_pronunciation(self.wxr, tree.children[0], out, {}, {}, {}, "en")
+        self.assertEqual(
+            out,
+            {
+                "sounds": [
+                    {"ipa": "/ɪnˈkɹiːs/", "pos": ["verb"]},
+                    {"ipa": "/ˈɪnkɹiːs/", "pos": ["noun"]},
+                ]
+            },
+        )
+
+    def test_pos_template_root_level_label(self):
+        self.wxr.wtp.start_page("dotcom")
+        self.add_pos_pronunciation_templates()
+        tree = self.wxr.wtp.parse("""=== Pronunciation ===
+{{i|noun}}
+* {{IPA|en|/dɒtˈkɒm/}}
+{{i|verb}}
+* {{IPA|en|/ˈdɒtkɒm/}}
+""")
+        out = {}
+        parse_pronunciation(self.wxr, tree.children[0], out, {}, {}, {}, "en")
+        self.assertEqual(
+            out,
+            {
+                "sounds": [
+                    {"ipa": "/dɒtˈkɒm/", "pos": ["noun"]},
+                    {"ipa": "/ˈdɒtkɒm/", "pos": ["verb"]},
+                ]
+            },
+        )
+
+    def test_pos_template_prefix_and_postfix_labels(self):
+        self.wxr.wtp.start_page("reboot")
+        self.add_pos_pronunciation_templates()
+        tree = self.wxr.wtp.parse("""=== Pronunciation ===
+* {{q|verb}} {{IPA|en|/ɹiːˈbuːt/}}
+* {{IPA|en|/ˈɹiːbuːt/}} {{q|noun|verb}}
+""")
+        out = {}
+        parse_pronunciation(self.wxr, tree.children[0], out, {}, {}, {}, "en")
+        self.assertEqual(
+            out,
+            {
+                "sounds": [
+                    {"ipa": "/ɹiːˈbuːt/", "pos": ["verb"]},
+                    {"ipa": "/ˈɹiːbuːt/", "pos": ["noun", "verb"]},
+                ]
+            },
+        )
+
+    def test_pos_template_multi_pos_and_parenthetical_label(self):
+        self.wxr.wtp.start_page("deserts")
+        self.add_pos_pronunciation_templates()
+        tree = self.wxr.wtp.parse("""=== Pronunciation ===
+* {{a|en|noun (barren areas)|verb}} {{IPA|en|/ˈdɛzɚts/}}
+""")
+        out = {}
+        parse_pronunciation(self.wxr, tree.children[0], out, {}, {}, {}, "en")
+        self.assertEqual(
+            out,
+            {"sounds": [{"ipa": "/ˈdɛzɚts/", "pos": ["noun", "verb"]}]},
+        )
+
+    def test_pos_template_multiple_groups_on_one_line(self):
+        # Norwegian Bokmål section
+        self.wxr.wtp.start_page("abandoner")
+        self.add_pos_pronunciation_templates()
+        tree = self.wxr.wtp.parse("""=== Pronunciation ===
+* {{sense|noun}} {{IPA|nb|/abaŋˈdɔŋər/}}, {{sense|verb}} {{IPA|nb|/abandɔˈneːr/}}
+""")
+        out = {}
+        parse_pronunciation(self.wxr, tree.children[0], out, {}, {}, {}, "nb")
+        self.assertEqual(
+            out,
+            {
+                "sounds": [
+                    {"ipa": "/abaŋˈdɔŋər/", "pos": ["noun"]},
+                    {"ipa": "/abandɔˈneːr/", "pos": ["verb"]},
+                ]
+            },
+        )
+
+    def test_accent_template_non_pos_label_remains_tag(self):
+        self.wxr.wtp.start_page("conduct")
+        self.add_pos_pronunciation_templates()
+        tree = self.wxr.wtp.parse("""=== Pronunciation ===
+* {{a|en|RP}} {{IPA|en|/ˈkɒndʌkt/}}
+""")
+        out = {}
+        parse_pronunciation(self.wxr, tree.children[0], out, {}, {}, {}, "en")
+        self.assertEqual(
+            out,
+            {"sounds": [{"ipa": "/ˈkɒndʌkt/", "tags": ["Received-Pronunciation"]}]},
         )
 
     def test_no_templates1(self):
