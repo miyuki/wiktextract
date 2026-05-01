@@ -157,6 +157,30 @@ class TestTrGloss(TestCase):
                 }
             ],
         )
+    def test_example_trailing_author_ref(self):
+        page_data = parse_page(
+            self.wxr,
+            "azamet",
+            """==Türkçe==
+===Ad===
+{{tr-ad}}
+# [[gurur]]
+::''Arkadaşlarımdan ayrılıp onun yanına geçmek azametime dokundu.'' - R. N. Güntekin""",
+        )
+        self.assertEqual(
+            page_data[0]["senses"],
+            [
+                {
+                    "glosses": ["gurur"],
+                    "examples": [
+                        {
+                            "text": "Arkadaşlarımdan ayrılıp onun yanına geçmek azametime dokundu.",
+                            "ref": "R. N. Güntekin",
+                        }
+                    ],
+                }
+            ],
+        )
 
     def test_form_of_çekim_template_lists(self):
         self.wxr.wtp.add_page(

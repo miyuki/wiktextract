@@ -16,6 +16,8 @@ def extract_example_list_item(
     list_item: WikiNode,
     example: Example,
 ) -> None:
+    seen_italic = False
+    trailing_text_parts: list[str] = []
     for node in list_item.children:
         if isinstance(node, TemplateNode):
             if node.template_name in ["ux", "uxi"]:
@@ -54,7 +56,15 @@ def extract_example_list_item(
                                 example,
                                 "bold_translation_offsets",
                             )
-
+                            seen_italic = True
+        elif isinstance(node, str) and seen_italic:
+            trailing_text_parts.append(node)
+            
+    if example.ref == "" and trailing_text_parts:
+        trailing = "".join(trailing_text_parts).strip()
+        trailing = trailing.lstrip("-–—").strip()
+        if trailing != "":
+            example.ref = trailing
 
 def extract_ux_template(
     wxr: WiktextractContext,
