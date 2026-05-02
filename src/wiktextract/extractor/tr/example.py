@@ -1,3 +1,5 @@
+import re
+
 from wikitextprocessor import NodeKind, TemplateNode, WikiNode
 
 from ...page import clean_node
@@ -16,18 +18,26 @@ def extract_example_list_item(
     list_item: WikiNode,
     example: Example,
 ) -> None:
-    seen_italic = False
+    seen_text = False
     trailing_text_parts: list[str] = []
+    plain_string_parts: list[str] = []
+    has_text_node = False
     for node in list_item.children:
         if isinstance(node, TemplateNode):
             if node.template_name in ["ux", "uxi"]:
                 extract_ux_template(wxr, word_entry.lang_code, node, example)
+                has_text_node = True
             elif node.template_name == "örnek":
                 extract_örnek_template(wxr, word_entry.lang_code, node, example)
+                has_text_node = True
+            elif node.template_name in ("kt", "mt"):
+                extract_kt_template(wxr, node, example)
+                has_text_node = True
             elif node.template_name in GLOSS_LIST_LINKAGE_TEMPLATES:
                 extract_gloss_list_linkage_template(wxr, word_entry, node)
             elif node.template_name.startswith("AT:"):
                 extract_at_template(wxr, example, node)
+                has_text_node = True
         elif isinstance(node, WikiNode):
             match node.kind:
                 case NodeKind.LIST:
@@ -56,13 +66,21 @@ def extract_example_list_item(
                                 example,
                                 "bold_translation_offsets",
                             )
-                        seen_italic = True
-        elif isinstance(node, str) and seen_italic:
-            trailing_text_parts.append(node)
-            
-    if example.ref == "" and trailing_text_parts:
+                        seen_text = True
+                        has_text_node = True
+        elif isinstance(node, str):
+            if seen_text:
+                trailing_text_parts.append(node)
+            else:
+                plain_string_parts.append(node)
+
+    if not has_text_node and plain_string_parts:
+        extract_quoted_plain_example(
+            "".join(plain_string_parts), example
+        )
+    elif example.ref == "" and trailing_text_parts:
         trailing = "".join(trailing_text_parts).strip()
-        trailing = trailing.lstrip("-–—").strip()
+        trailing = trailing.lstrip("-–—").strip("()").strip()
         if trailing != "":
             example.ref = trailing
 
@@ -204,3 +222,67 @@ def extract_at_template(
                 break
 
     example.ref = clean_node(wxr, None, t_node).splitlines()[0]
+
+
+KT_REF_FIELDS = (
+    "yazar",
+    "başlık",
+    "dergi",
+    "sayı",
+    "yıl",
+    "tarih",
+    "sayfa",
+    "yayıncı",
+)
+
+
+def extract_kt_template(
+    wxr: WiktextractContext,
+    t_node: TemplateNode,
+    example: Example,
+) -> None:
+    # https://tr.wiktionary.org/wiki/Şablon:kt (book) and Şablon:mt (magazine).
+    # tanıklık = example sentence; remaining fields = ref.
+    text_arg = t_node.template_parameters.get("tanıklık", "")
+    text = clean_node(wxr, None, text_arg)
+    if text != "":
+        example.text = text
+        calculate_bold_offsets(
+            wxr,
+            wxr.wtp.parse(wxr.wtp.node_to_wikitext(text_arg)),
+            text,
+            example,
+            "bold_text_offsets",
+        )
+    ref_parts: list[str] = []
+    for field in KT_REF_FIELDS:
+        value = clean_node(wxr, None, t_node.template_parameters.get(field, ""))
+        if value != "":
+            ref_parts.append(value)
+    if ref_parts and example.ref == "":
+        example.ref = ", ".join(ref_parts)
+
+
+QUOTED_EXAMPLE_RE = re.compile(
+    r'^\s*[\"“"]\s*(?P<text>.+?)\s*[\"”"]\s*'
+    r'(?:[-–—]\s*)?(?P<ref>.+?)?\s*$',
+    re.DOTALL,
+)
+
+
+def extract_quoted_plain_example(raw: str, example: Example) -> None:
+    # Plain `"..." - Author` lines that use no italic/template markup.
+    raw = raw.strip()
+    if raw == "":
+        return
+    m = QUOTED_EXAMPLE_RE.match(raw)
+    if m is None:
+        return
+    text = (m.group("text") or "").strip()
+    if text == "":
+        return
+    example.text = text
+    if example.ref == "":
+        ref = (m.group("ref") or "").strip().lstrip("-–—").strip("()").strip()
+        if ref != "":
+            example.ref = ref
