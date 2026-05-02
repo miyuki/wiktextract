@@ -56,7 +56,7 @@ def extract_example_list_item(
                                 example,
                                 "bold_translation_offsets",
                             )
-                            seen_italic = True
+                        seen_italic = True
         elif isinstance(node, str) and seen_italic:
             trailing_text_parts.append(node)
             

@@ -182,6 +182,31 @@ class TestTrGloss(TestCase):
             ],
         )
 
+    def test_example_trailing_author_ref_hash_colon(self):
+        page_data = parse_page(
+            self.wxr,
+            "dok",
+            """==Türkçe==
+===Ad===
+{{tr-ad}}
+# [[tersane]]
+#:''Çekiç sesleri geliyor doklardan. Güzelim bahar rüzgârında ter kokuları. İstanbul'u dinliyorum, gözlerim kapalı.'' - O. V. Kanık""",
+        )
+        self.assertEqual(
+            page_data[0]["senses"],
+            [
+                {
+                    "glosses": ["tersane"],
+                    "examples": [
+                        {
+                            "text": "Çekiç sesleri geliyor doklardan. Güzelim bahar rüzgârında ter kokuları. İstanbul'u dinliyorum, gözlerim kapalı.",
+                            "ref": "O. V. Kanık",
+                        }
+                    ],
+                }
+            ],
+        )
+
     def test_form_of_çekim_template_lists(self):
         self.wxr.wtp.add_page(
             "Şablon:karşılaştırma",
