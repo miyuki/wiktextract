@@ -3,7 +3,7 @@ import re
 import urllib
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Iterator
+from typing import Iterator, Literal
 
 from wikitextprocessor import (
     HTMLNode,
@@ -203,7 +203,7 @@ def parse_pronunciation(
     """Parses the pronunciation section from a language section on a
     page."""
     if level_node.kind in LEVEL_KINDS:
-        contents = []
+        contents: list[str | WikiNode | TemplateNode] = []
         for node in level_node.children:
             if isinstance(node, TemplateNode):
                 if node.template_name == "th-pron":
@@ -231,7 +231,7 @@ def parse_pronunciation(
         isinstance(x, WikiNode) and x.kind == NodeKind.LIST for x in contents
     ):
         # expand all templates
-        new_contents: list[str | WikiNode] = []
+        new_contents: list[str | WikiNode | TemplateNode] = []
         for lst in contents:
             if isinstance(lst, TemplateNode):
                 temp = wxr.wtp.node_to_wikitext(lst)
@@ -360,6 +360,8 @@ def parse_pronunciation(
             return ""
         return None
 
+    may_be_duplicates = False
+
     def parse_pron_post_template_fn(
         name: str, ht: TemplateArgs, text: str
     ) -> str | None:
@@ -368,6 +370,7 @@ def parse_pronunciation(
         # except with the additional expanded text as an input, and
         # possible side-effects from the expansion and recursion (like
         # calling other subtemplates that are handled in _template_fn.
+        nonlocal may_be_duplicates
         if is_panel_template(wxr, name):
             return ""
         if name in {
@@ -403,6 +406,12 @@ def parse_pronunciation(
             if pron_t := extract_pron_template(wxr, name, ht, text):
                 pron_templates.append(pron_t)
                 return f"__PRON_TEMPLATE_{len(pron_templates) - 1}__"
+        # Catch templates that generate duplicate sound data entries
+        # here; if the text produces a big, toggleable section, the
+        # "header" for that section might be duplicated. Add more conditions
+        # if necessary.
+        if text.startswith("<") and "vsToggleElement" in text:
+            may_be_duplicates = True
         return text
 
     def flattened_tree(lines: list[WikiNode | str]) -> Iterator[WikiNode | str]:
@@ -458,7 +467,6 @@ def parse_pronunciation(
     active_pos: str | None = None
 
     for line in split_cleaned_node_on_newlines(contents):
-        # print(f"{line=}")
         prefix: str | None = None
         earlier_base_data: SoundData | None = None
         if not line:
@@ -516,16 +524,34 @@ def parse_pronunciation(
                 continue
 
             if "IPA" in text:
-                field = "ipa"
+                field: Literal[
+                    "audio",
+                    "audio-ipa",
+                    "enpr",
+                    "form",
+                    "hangeul",
+                    "homophone",
+                    "ipa",
+                    "mp3_url",
+                    "note",
+                    "ogg_url",
+                    "other",
+                    "rhymes",
+                    "tags",
+                    "text",
+                    "topics",
+                    "zh-pron",
+                ] = "ipa"
             else:
                 # This is used for Rhymes, Homophones, etc
                 field = "other"
 
             # Check if it contains Japanese "Tokyo" pronunciation with
             # special syntax
+            pron: SoundData
             m = re.search(r"(?m)\(Tokyo\) +([^ ]+) +\[", text)
             if m:
-                pron: SoundData = {field: m.group(1)}  # type: ignore[misc]
+                pron = {field: m.group(1)}  # type: ignore[misc]
                 if active_pos:
                     pron["pos"] = active_pos  # type: ignore[typeddict-unknown-key]
                 data_append(data, "sounds", pron)
@@ -667,7 +693,17 @@ def parse_pronunciation(
                         pron["form"] = prefix
                     if active_pos:
                         pron["pos"] = active_pos  # type: ignore[typeddict-unknown-key]
-                    data_append(data, "sounds", pron)
+                    if may_be_duplicates is True:
+                        ok = True
+                        for comp_sound in data.get("sounds", []):
+                            # Python has dict comparison since 3.8
+                            if pron == comp_sound:
+                                ok = False
+                                break
+                        if ok:
+                            data_append(data, "sounds", pron)
+                    else:
+                        data_append(data, "sounds", pron)
                 # have_pronunciations = True
 
         # XXX what about {{hyphenation|...}}, {{hyph|...}}
