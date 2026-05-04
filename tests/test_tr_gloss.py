@@ -157,6 +157,132 @@ class TestTrGloss(TestCase):
                 }
             ],
         )
+    def test_example_trailing_author_ref(self):
+        page_data = parse_page(
+            self.wxr,
+            "azamet",
+            """==Türkçe==
+===Ad===
+{{tr-ad}}
+# [[gurur]]
+::''Arkadaşlarımdan ayrılıp onun yanına geçmek azametime dokundu.'' - R. N. Güntekin""",
+        )
+        self.assertEqual(
+            page_data[0]["senses"],
+            [
+                {
+                    "glosses": ["gurur"],
+                    "examples": [
+                        {
+                            "text": "Arkadaşlarımdan ayrılıp onun yanına geçmek azametime dokundu.",
+                            "ref": "R. N. Güntekin",
+                        }
+                    ],
+                }
+            ],
+        )
+
+    def test_example_trailing_author_ref_hash_colon(self):
+        page_data = parse_page(
+            self.wxr,
+            "dok",
+            """==Türkçe==
+===Ad===
+{{tr-ad}}
+# [[tersane]]
+#:''Çekiç sesleri geliyor doklardan. Güzelim bahar rüzgârında ter kokuları. İstanbul'u dinliyorum, gözlerim kapalı.'' - O. V. Kanık""",
+        )
+        self.assertEqual(
+            page_data[0]["senses"],
+            [
+                {
+                    "glosses": ["tersane"],
+                    "examples": [
+                        {
+                            "text": "Çekiç sesleri geliyor doklardan. Güzelim bahar rüzgârında ter kokuları. İstanbul'u dinliyorum, gözlerim kapalı.",
+                            "ref": "O. V. Kanık",
+                        }
+                    ],
+                }
+            ],
+        )
+
+    def test_kt_template_book_citation(self):
+        page_data = parse_page(
+            self.wxr,
+            "mayıs",
+            """==Türkçe==
+===Ad===
+{{tr-ad}}
+# [[ay]]
+#*'''2006:''' {{kt|başlık=Acı Lokma|yazar=Fahri ERDİNÇ|yayıncı=Yordam Kitap|yıl=2006|sayfa=31|tanıklık=Kalk, ocağın batmasın. '''Mayısın''' üstüne oturmuşsun.|dil=tr}}""",
+        )
+        self.assertEqual(
+            page_data[0]["senses"],
+            [
+                {
+                    "glosses": ["ay"],
+                    "examples": [
+                        {
+                            "text": "Kalk, ocağın batmasın. Mayısın üstüne oturmuşsun.",
+                            "bold_text_offsets": [(23, 30)],
+                            "ref": "Fahri ERDİNÇ, Acı Lokma, 2006, 31, Yordam Kitap",
+                        }
+                    ],
+                }
+            ],
+        )
+
+    def test_mt_template_magazine_citation(self):
+        page_data = parse_page(
+            self.wxr,
+            "leylek",
+            """==Türkçe==
+===Ad===
+{{tr-ad}}
+# [[kuş]]
+#*'''2025:''' {{mt|dergi=Kitap-lık|sayı=239|yıl=2025|başlık=İki|yazar=Yasemin IŞIK|sayfa=112|tanıklık=Adem abi ve Yaren '''leyleğin''' yılda bir kez kavuştuğu bu anda, annem de ellerini göğsüne kavuşturmuş, başını sallayarak ekrana bakıyor.|dil=tr}}""",
+        )
+        self.assertEqual(
+            page_data[0]["senses"],
+            [
+                {
+                    "glosses": ["kuş"],
+                    "examples": [
+                        {
+                            "text": "Adem abi ve Yaren leyleğin yılda bir kez kavuştuğu bu anda, annem de ellerini göğsüne kavuşturmuş, başını sallayarak ekrana bakıyor.",
+                            "bold_text_offsets": [(18, 26)],
+                            "ref": "Yasemin IŞIK, İki, Kitap-lık, 239, 2025, 112",
+                        }
+                    ],
+                }
+            ],
+        )
+
+    def test_quoted_plain_example_with_author(self):
+        page_data = parse_page(
+            self.wxr,
+            "göz",
+            """==Türkçe==
+===Ad===
+{{tr-ad}}
+# [[organ]]
+#* "Asıl felaket bu pınara sırt çevirmek, bu pınarın gözlerine taş tıkamak değil de ne olurdu?" - Tarık Buğra""",
+        )
+        self.assertEqual(
+            page_data[0]["senses"],
+            [
+                {
+                    "glosses": ["organ"],
+                    "examples": [
+                        {
+                            "text": "Asıl felaket bu pınara sırt çevirmek, bu pınarın gözlerine taş tıkamak değil de ne olurdu?",
+                            "ref": "Tarık Buğra",
+                        }
+                    ],
+                }
+            ],
+        )
 
     def test_form_of_çekim_template_lists(self):
         self.wxr.wtp.add_page(
