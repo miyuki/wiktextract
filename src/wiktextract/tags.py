@@ -4822,6 +4822,7 @@ xlat_tags_map: dict[str, str | list[str]] = {
     # gratis/Swedish
     "not inflected": "indeclinable",
     "Sparsely attested near 1500": "archaic rare",
+    "Tajik spelling": "Tajik Cyrillic",
 }
 
 # This mapping is applied to full descriptions before splitting by comma.
